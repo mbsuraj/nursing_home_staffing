@@ -101,43 +101,71 @@ def exhibit3_national_forecast():
     print("  exhibit3_national_forecast.png")
 
 
-# ─── Exhibit 4: State-level forecast vs observed ─────────────────────────────
+# ─── Exhibit 4: State risk quadrant (forecasted rate × workforce size) ────────
 def exhibit4_state_forecast():
-    high_risk = ["MO", "OK", "TX"]
-    low_risk = ["NY"]
-    states = high_risk + low_risk
+    """Scatter: forecasted separation rate vs workforce size, by state."""
+    # Get forecasted rate (avg over validation period) per state
+    state_fcst = bayes[bayes["unique_id"].str.match(r"^[A-Z]{2}/total/total$")].copy()
+    state_fcst["state"] = state_fcst["unique_id"].str[:2]
+    state_fcst = state_fcst[state_fcst["ds"] <= VAL_END]
+    state_avg_rate = state_fcst.groupby("state")["BayesHier"].mean()
 
-    fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharey=True)
-    for idx, st in enumerate(states):
-        ax = axes[idx // 2, idx % 2]
-        sh = hist[hist["state"] == st].groupby("month_end").apply(
-            lambda g: g["seps"].sum() / g["active"].sum(), include_groups=False
-        ).reset_index(name="rate")
-        sh = sh[(sh["month_end"] >= "2024-04-01") & (sh["month_end"] <= VAL_END)]
-        sf = bayes[(bayes["unique_id"] == f"{st}/total/total") & (bayes["ds"] <= VAL_END)]
+    # Get workforce size (last training month active count per state)
+    train = pd.read_csv(DATA_DIR / "panel.csv", parse_dates=["month_end"])
+    emp_train = train[(train["worker_type"] == "Employee") & (train["month_end"] == TRAIN_END)]
+    state_size = emp_train.groupby("state")["active_count"].sum()
 
-        ax.plot(sh["month_end"], sh["rate"] * 100, "o-", markersize=3,
-                color=C_OBS, linewidth=1, label="Observed")
-        if not sf.empty:
-            ax.plot(sf["ds"], sf["BayesHier"] * 100, "D-", markersize=4,
-                    color=C_FCST, linewidth=1.2, label="Forecast")
-            ax.fill_between(sf["ds"], sf["BayesHier-lo-80"] * 100,
-                            sf["BayesHier-hi-80"] * 100, alpha=0.15, color=C_FCST)
-        ax.axvline(pd.Timestamp(TRAIN_END), color="gray", linestyle="--",
-                   alpha=0.5, linewidth=0.7)
-        label = "(high-risk)" if st in high_risk else "(lower-risk)"
-        ax.set_title(f"{st} {label}", fontsize=9)
-        ax.grid(True, alpha=0.2)
-        if idx == 0:
-            ax.legend(fontsize=7, loc="upper left")
+    # Merge
+    df = pd.DataFrame({"rate": state_avg_rate, "size": state_size}).dropna()
+    df["rate_pct"] = df["rate"] * 100
 
-    fig.suptitle("Exhibit 4: State-Level Forecast vs Observed Separation Rate,\nApril–June 2025",
-                 fontsize=11, y=1.02)
-    fig.supylabel("Monthly Separation Rate (%)", fontsize=9)
-    plt.tight_layout()
-    fig.savefig(FIG_DIR / "exhibit4_state_forecast.png")
+    # Quadrant thresholds
+    rate_med = df["rate_pct"].median()
+    size_med = df["size"].median()
+
+    fig, ax = plt.subplots(figsize=(8.5, 6))
+
+    # Shade quadrants
+    xlim = (0, df["size"].max() / 1000 * 1.1)
+    ylim = (df["rate_pct"].min() * 0.9, df["rate_pct"].max() * 1.05)
+    ax.axhspan(rate_med, ylim[1], xmin=0, xmax=1, alpha=0.04, color=C_FCST)
+    ax.axhspan(ylim[0], rate_med, xmin=0, xmax=1, alpha=0.04, color=C_OBS)
+
+    # Plot states as small dots + text labels with minor manual offsets for readability
+    for state, row in df.iterrows():
+        color = C_FCST if row["rate_pct"] >= rate_med else C_OBS
+        weight = "bold" if state in ["OK", "MO", "OH", "TX"] else "normal"
+        x = row["size"] / 1000
+        y = row["rate_pct"]
+        ax.plot(x, y, "o", markersize=3, color=color, alpha=0.4)
+        ax.annotate(state, (x, y), fontsize=6.5, ha="center", va="bottom",
+                    color=color, fontweight=weight,
+                    xytext=(0, 2), textcoords="offset points")
+
+    # Quadrant lines
+    ax.axhline(rate_med, color="gray", linestyle="--", linewidth=0.8, alpha=0.6)
+    ax.axvline(size_med / 1000, color="gray", linestyle="--", linewidth=0.8, alpha=0.6)
+
+    # Quadrant labels
+    ax.text(0.97, 0.97, "High turnover\nLarge workforce", transform=ax.transAxes,
+            ha="right", va="top", fontsize=7, color=C_FCST, fontstyle="italic", alpha=0.8)
+    ax.text(0.03, 0.97, "High turnover\nSmall workforce", transform=ax.transAxes,
+            ha="left", va="top", fontsize=7, color=C_FCST, fontstyle="italic", alpha=0.8)
+    ax.text(0.97, 0.03, "Low turnover\nLarge workforce", transform=ax.transAxes,
+            ha="right", va="bottom", fontsize=7, color=C_OBS, fontstyle="italic", alpha=0.8)
+    ax.text(0.03, 0.03, "Low turnover\nSmall workforce", transform=ax.transAxes,
+            ha="left", va="bottom", fontsize=7, color=C_OBS, fontstyle="italic", alpha=0.8)
+
+    ax.set_xlabel("Nursing Home Workforce Size (thousands of employees)")
+    ax.set_ylabel("Forecasted Monthly Separation Rate (%)")
+    ax.set_title("Exhibit 4: State Workforce Risk — Forecasted Turnover Rate vs Workforce Size")
+    ax.set_xscale("log")
+    ax.set_xticks([1, 2, 5, 10, 20, 50, 100])
+    ax.get_xaxis().set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0f}K"))
+    ax.grid(True, alpha=0.15)
+    fig.savefig(FIG_DIR / "exhibit4_state_quadrant.png")
     plt.close()
-    print("  exhibit4_state_forecast.png")
+    print("  exhibit4_state_quadrant.png")
 
 
 # ─── Supplementary candidates ────────────────────────────────────────────────
