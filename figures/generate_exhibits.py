@@ -36,8 +36,6 @@ hist = emp.groupby(["state", "ownership", "role", "month_end"]).agg(
 ).reset_index()
 hist["rate"] = hist["seps"] / hist["active"]
 
-bayes = pd.read_csv(OUTPUT_DIR / "bayesian_forecast_rates.csv", parse_dates=["ds"])
-
 TRAIN_END = "2025-03-01"
 VAL_END = "2025-06-01"
 
@@ -57,7 +55,9 @@ def exhibit2_ownership():
     colors = {"For-Profit": C_FP, "Non-Profit": C_NP, "Government": C_GOV}
 
     fig, ax = plt.subplots(figsize=(6.5, 4.2))
-    ann = 1 - (1 - own.values) ** 12  # annualize
+    # Annualize on the flow/stock basis (12 x monthly rate), matching the national
+    # turnover figure. This is a separation-event rate and can exceed 100%.
+    ann = own.values * 12
     bars = ax.bar(order, ann * 100, color=[colors[o] for o in order],
                   alpha=0.85, width=0.6)
     # Value labels on bars
@@ -68,6 +68,11 @@ def exhibit2_ownership():
     ax.set_title("Exhibit 2: Annualized Employee Separation Rate by Facility Ownership,\nOctober 2022–March 2025")
     ax.set_ylim(0, max(ann) * 100 * 1.15)
     ax.grid(True, alpha=0.2, axis="y")
+    fig.text(0.5, 0.01,
+             "Notes: Annualized separation events per position (12 × monthly separation rate), consistent with the\n"
+             "national turnover definition. Because positions can turn over more than once a year, the rate can exceed 100%.",
+             ha="center", va="bottom", fontsize=7, color="#444444")
+    fig.subplots_adjust(bottom=0.18)
     fig.savefig(FIG_DIR / "exhibit2_ownership.png")
     plt.close()
     print("  exhibit2_ownership.png (bar chart)")
@@ -79,15 +84,16 @@ def exhibit3_national_forecast():
     nat_hist = hist[(hist["month_end"] >= DISPLAY_START) & (hist["month_end"] <= VAL_END)].groupby("month_end").apply(
         lambda g: g["seps"].sum() / g["active"].sum(), include_groups=False
     ).reset_index(name="rate")
-    nat_fcst = bayes[(bayes["unique_id"] == "National/total/total") & (bayes["ds"] <= VAL_END)]
+    fcst = pd.read_csv(OUTPUT_DIR / "seasonal_naive_forecast_rates.csv", parse_dates=["ds"])
+    nat_fcst = fcst[(fcst["unique_id"] == "National/total/total") & (fcst["ds"] <= VAL_END)]
 
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(nat_hist["month_end"], nat_hist["rate"] * 100, "o-", markersize=4,
             color=C_OBS, linewidth=1.3, label="Observed")
-    ax.plot(nat_fcst["ds"], nat_fcst["BayesHier"] * 100, "D-", markersize=6,
+    ax.plot(nat_fcst["ds"], nat_fcst["forecast"] * 100, "D-", markersize=6,
             color=C_FCST, linewidth=1.6, label="Forecast")
-    ax.fill_between(nat_fcst["ds"], nat_fcst["BayesHier-lo-80"] * 100,
-                    nat_fcst["BayesHier-hi-80"] * 100, alpha=0.2, color=C_FCST,
+    ax.fill_between(nat_fcst["ds"], nat_fcst["forecast_lo80"] * 100,
+                    nat_fcst["forecast_hi80"] * 100, alpha=0.2, color=C_FCST,
                     label="80% prediction interval")
     ax.axvline(pd.Timestamp(TRAIN_END), color="gray", linestyle="--", alpha=0.6,
                linewidth=0.9, label="Training cutoff")
@@ -105,10 +111,11 @@ def exhibit3_national_forecast():
 def exhibit4_state_forecast():
     """Scatter: forecasted separation rate vs workforce size, by state."""
     # Get forecasted rate (avg over validation period) per state
-    state_fcst = bayes[bayes["unique_id"].str.match(r"^[A-Z]{2}/total/total$")].copy()
+    fcst = pd.read_csv(OUTPUT_DIR / "seasonal_naive_forecast_rates.csv", parse_dates=["ds"])
+    state_fcst = fcst[fcst["unique_id"].str.match(r"^[A-Z]{2}/total/total$")].copy()
     state_fcst["state"] = state_fcst["unique_id"].str[:2]
     state_fcst = state_fcst[state_fcst["ds"] <= VAL_END]
-    state_avg_rate = state_fcst.groupby("state")["BayesHier"].mean()
+    state_avg_rate = state_fcst.groupby("state")["forecast"].mean()
 
     # Get workforce size (last training month active count per state)
     train = pd.read_csv(DATA_DIR / "panel.csv", parse_dates=["month_end"])
@@ -117,6 +124,10 @@ def exhibit4_state_forecast():
 
     # Merge
     df = pd.DataFrame({"rate": state_avg_rate, "size": state_size}).dropna()
+    # Exclude WV for readability: forecast 18.6%, ~7,400 employees. Its forecast reflects
+    # a non-recurring June 2024 separation spike (33.9% that month, a facility-level event)
+    # projected forward by the seasonal method; WV's actual 2025 rate returned to ~7%.
+    df = df.drop(index="WV", errors="ignore")
     df["rate_pct"] = df["rate"] * 100
 
     # Quadrant thresholds
@@ -156,13 +167,19 @@ def exhibit4_state_forecast():
     ax.text(0.03, 0.03, "Low turnover\nSmall workforce", transform=ax.transAxes,
             ha="left", va="bottom", fontsize=7, color=C_OBS, fontstyle="italic", alpha=0.8)
 
-    ax.set_xlabel("Nursing Home Workforce Size (thousands of employees)")
+    ax.set_xlabel("Nursing Home Workforce Size (employees)")
     ax.set_ylabel("Forecasted Monthly Separation Rate (%)")
     ax.set_title("Exhibit 4: State Workforce Risk — Forecasted Turnover Rate vs Workforce Size")
     ax.set_xscale("log")
     ax.set_xticks([1, 2, 5, 10, 20, 50, 100])
     ax.get_xaxis().set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0f}K"))
     ax.grid(True, alpha=0.15)
+    fig.text(0.5, 0.005,
+             "Note: West Virginia (forecasted 18.6% separation rate, ~7,400 employees) is omitted for "
+             "readability. Its forecast reflects a non-recurring June 2024 spike (33.9% that month, a\n"
+             "facility-level event) that the seasonal method projects forward; WV's actual 2025 rate was ~7%.",
+             ha="center", va="bottom", fontsize=6.5, color="#444444")
+    fig.subplots_adjust(bottom=0.15)
     fig.savefig(FIG_DIR / "exhibit4_state_quadrant.png")
     plt.close()
     print("  exhibit4_state_quadrant.png")
