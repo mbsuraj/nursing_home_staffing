@@ -8,3 +8,6 @@ __pycache__/
 # docs/: track only supplementary_files
 docs/*
 !docs/supplementary_files/
+# data/: track only the reproduction input panel.csv
+data/*
+!data/panel.csv
