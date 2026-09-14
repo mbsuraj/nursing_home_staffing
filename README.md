@@ -1,45 +1,51 @@
-# Nursing Home Workforce Instability: Early Warning Systems
+# Nursing Home Workforce Instability
 
-Forecasting monthly nursing home employee separation rates at the state level using CMS Payroll-Based Journal data.
+Reproduction materials for a research paper on monthly employee separation (turnover)
+in U.S. nursing homes, using CMS Payroll-Based Journal (PBJ) data.
 
-## Overview
+**Purpose of this repository.** It exists solely to **reproduce the results and exhibits**
+reported in the manuscript (currently under review at a peer-reviewed health policy
+journal). It is not a general-purpose library.
 
-This project examines whether routinely collected federal payroll data can support anticipatory workforce planning for U.S. nursing homes. Using 30 months of CMS PBJ employee-detail records (Oct 2022–Mar 2025) covering ~1 million workers across 51 states, we:
+## What the paper shows
 
-1. Measure monthly separation rates by state, ownership type, and nursing role
-2. Identify structured patterns (geographic variation, ownership gradient, quarterly periodicity)
-3. Demonstrate that these patterns are forecastable using a simple seasonal-naive model
+Using ~30 months of CMS PBJ employee-detail records (October 2022 – March 2025), the
+paper documents that nursing-home turnover follows structured, repeatable patterns —
+geographic, ownership-based, role-based, and seasonal (quarter-end) — and that a simple
+seasonal-naive model can anticipate near-term, state-level turnover well enough to be
+useful for workforce planning.
 
-## Structure
+## Reproduce the results
+
+1. Install dependencies (Python 3.12+):
+   ```
+   pip install -r requirements.txt
+   ```
+2. Open and run end-to-end:
+   ```
+   eda/01_reproduce_paper_results.ipynb
+   ```
+   This single notebook reproduces every results-section statistic (geographic
+   variation, ownership gradient, role differences, quarter-end seasonality), the
+   rolling-origin backtest, the forecast validation, and all four exhibits — all from
+   `data/panel.csv`.
+
+## Repository layout
 
 ```
-data/             Panel dataset (State × Ownership × Role × Month)
-model/            Seasonal-naive forecaster + rolling-origin backtest
-eda/              Exploratory analysis notebooks (pre- and post-forecast)
-figures/          Publication-quality exhibits (300 DPI)
-docs/             Paper draft and research notes
+data/panel.csv                          Analysis input: State × Ownership × Role × Month panel
+eda/01_reproduce_paper_results.ipynb    Standalone reproduction of all paper results + exhibits
+eda/02_eda_panel.ipynb                  Exploratory panel analysis
+eda/03_health_affairs.ipynb             Exploratory / submission-specific analysis
+model/seasonal_naive.py                 Seasonal-naive forecaster (bottom grain + weighted roll-up)
+model/rolling_backtest.py               Rolling-origin backtest vs a persistence baseline
+figures/generate_exhibits.py            Exhibits 2–4
+figures/generate_map.py                 Exhibit 1 (state choropleth map)
+docs/supplementary_files/               Supplementary data + data dictionary
+adhoc_scripts/                          One-off CMS data fetch/validation utilities
 ```
 
-## Workflow
+## Data source
 
-1. **Panel construction** — Raw PBJ quarterly files processed into `data/panel.csv` (State × Ownership × Role × Worker Type × Month)
-2. **Pre-model EDA** — `eda/eda_panel.ipynb`: separation rates by worker type, role, ownership, state; seasonal patterns; train/val split design
-3. **Modeling** — `model/seasonal_naive.py` (seasonal-naive at the bottom grain + workforce-weighted aggregation, primary) and `model/rolling_backtest.py` (rolling-origin validation vs a persistence baseline)
-4. **Validation & reproduction** — `eda/turnover_check.ipynb`: single standalone notebook that reproduces every results-section statistic (geography, ownership, role, seasonality), the rolling-origin backtest, forecast validation, and all four exhibits
-5. **Exhibits** — `figures/generate_exhibits.py` and `figures/generate_map.py`: publication-ready figures for the paper
-6. **Paper** — `docs/paper.md`: draft manuscript targeting Health Affairs ("Building Early Warning Systems for Nursing Home Workforce Instability")
-
-## Key Findings
-
-- Monthly separation rates range from 4–13% across states (threefold spread)
-- For-profit facilities: ~66% annualized turnover vs ~53% in government facilities
-- Predictable quarter-end spikes (~1.6pp uplift every 3rd month)
-- A simple seasonal-naive model tracks held-out national turnover within ~0.1pp and reproduces the state risk ranking; bottom-grain rolling-origin error ~1.2pp (workforce-weighted), beating a persistence baseline
-
-## Data Source
-
-CMS Payroll-Based Journal employee-detail files (public, quarterly release).
-
-## Requirements
-
-Python 3.12+ with: `pandas`, `numpy`, `scipy`, `matplotlib`, `geopandas`
+CMS Payroll-Based Journal (PBJ) employee-detail files — public, quarterly release
+(data.cms.gov). Only the aggregated `data/panel.csv` is tracked in this repository.
