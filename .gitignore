@@ -3,3 +3,5 @@
 *.pkl
 docs/full_research_notes.md
 outreach*
+__pycache__/
+*.pyc
