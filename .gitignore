@@ -5,3 +5,6 @@ docs/full_research_notes.md
 outreach*
 __pycache__/
 *.pyc
+# docs/: track only supplementary_files
+docs/*
+!docs/supplementary_files/
