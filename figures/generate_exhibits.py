@@ -98,7 +98,7 @@ def exhibit3_national_forecast():
     ax.axvline(pd.Timestamp(TRAIN_END), color="gray", linestyle="--", alpha=0.6,
                linewidth=0.9, label="Training cutoff")
     ax.set_ylabel("Monthly Separation Rate (%)")
-    ax.set_title("Exhibit 3: National Forecast vs Observed Separation Rate,\nApril–June 2025")
+    ax.set_title("Exhibit 3: National Forecast vs Observed Separation Rate,\nApril–June 2025 Holdout")
     ax.legend(loc="upper left", framealpha=0.9)
     ax.grid(True, alpha=0.2)
     ax.set_ylim(5, 11)
