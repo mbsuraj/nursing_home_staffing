@@ -1,0 +1,30 @@
+{
+  "title": "Can Nursing Home Workforce Instability Be Anticipated? Evidence From CMS Payroll Data",
+  "description": "A Python library to reproduce all findings in the manuscript",
+  "creators": [
+    {
+      "name": "Malla, Bhanu Suraj",
+      "affiliation": "Georgia Institute of Technology"
+    },
+    {
+      "name": "Hu, Yuqing",
+      "affiliation": "Georgia Institute of Technology"
+    }
+  ],
+  "keywords": [
+    "Nursing",
+    "Workforce",
+    "Employee Separation",
+    "Predictive Modeling"
+  ],
+  "license": "MIT",
+  "upload_type": "software",
+  "access_right": "open",
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/mbsuraj/nursing_home_staffing",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}
